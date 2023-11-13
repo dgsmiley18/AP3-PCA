@@ -1,48 +1,55 @@
 const express = require('express');
 const cors = require('cors');
-const { connect } = require('@planetscale/database');
+const mysql = require('mysql2');
 require('dotenv').config();
 
 const app = express();
 app.use(cors());
 const port = process.env.PORT || 3000;
 
-const config = {
-  host: process.env.DATABASE_HOST,
-  username: process.env.DATABASE_USERNAME,
-  password: process.env.DATABASE_PASSWORD
-};
+// Criando a conexão usando a URL do banco de dados do ambiente
+const connection = mysql.createConnection(process.env.DATABASE_URL);
 
-const conn = connect(config);
+// Adicionando um tratamento de erro para a conexão
+connection.connect((err) => {
+  if (err) {
+    console.error('Erro ao conectar ao banco de dados:', err.message);
+    return;
+  }
+  console.log('Conectado ao banco de dados!');
+});
 
 app.use(express.json());
 
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
+  console.log('Rota /login acionada');
+
   try {
-    const row = await executeQuery(conn, 'SELECT * FROM Usuarios WHERE email = ? AND senha = ?', [email, password]);
+    const [row] = await executeQuery(connection, 'SELECT * FROM Usuarios WHERE email = ? AND senha = ?', [email, password]);
 
     if (row) {
       console.log('Login bem-sucedido!');
-      res.json({ message: 'Login bem-sucedido' });
+      res.json({ success: true, message: 'Login bem-sucedido' });
     } else {
-      res.status(401).json({ error: 'Credenciais inválidas' });
+      console.log('Login mal-sucedido. Credenciais inválidas.');
+      res.status(401).json({ success: false, error: 'Credenciais inválidas' });
     }
   } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ error: 'Erro no servidor' });
+    console.error('Erro na rota /login:', error.message);
+    res.status(500).json({ success: false, error: 'Erro no servidor' });
   }
 });
 
 async function executeQuery(connection, query, values) {
   return new Promise((resolve, reject) => {
-    connection.execute(query, values, (err, row) => {
+    connection.query(query, values, (err, results) => {
       if (err) {
         reject(err);
         return;
       }
-      resolve(row);
+      resolve(results);
     });
   });
 }
